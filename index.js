@@ -1,5 +1,17 @@
 const express = require('express');
 const app = express();
+
+// CORS fix - allow all origins
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(express.json());
 
 const users = {};
@@ -29,5 +41,10 @@ app.post('/validate', (req, res) => {
   });
 });
 
+// Health check endpoint
+app.get('/', (req, res) => {
+  res.json({ status: 'Server is running' });
+});
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('Server running'));
+app.listen(PORT, () => console.log('Server running on port ' + PORT));
