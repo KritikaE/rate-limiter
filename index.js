@@ -13,47 +13,35 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-const users = {};
+const userRequests = {};
 
 app.post('/validate', (req, res) => {
-  const userId = req.body.userId || req.ip;
+  const userId = req.body?.userId || req.ip || 'anonymous';
   const now = Date.now();
   
-  if (!users[userId]) {
-    users[userId] = {
-      tokens: 13, // Start with burst capacity
-      lastRefill: now
-    };
+  if (!userRequests[userId]) {
+    userRequests[userId] = [];
   }
   
-  const user = users[userId];
-  const timePassed = now - user.lastRefill;
+  userRequests[userId] = userRequests[userId].filter(timestamp => {
+    return (now - timestamp) < 60000;
+  });
   
-  // Refill tokens: 41 requests per 60 seconds = 0.683 tokens per second
-  const tokensToAdd = (timePassed / 1000) * (41 / 60);
-  user.tokens = Math.min(13, user.tokens + tokensToAdd); // Cap at burst size
-  user.lastRefill = now;
-  
-  // Check if we have tokens available
-  if (user.tokens < 1) {
-    const timeToNextToken = (1 - user.tokens) / (41 / 60) * 1000;
-    const retryAfter = Math.ceil(timeToNextToken / 1000);
-    res.set('Retry-After', retryAfter.toString());
-    
+  if (userRequests[userId].length >= 41) {
+    res.set('Retry-After', '60');
     return res.status(429).json({
       blocked: true,
-      reason: "Rate limit exceeded: max 41 requests per minute with burst of 13",
+      reason: "Rate limit exceeded: max 41 requests per minute",
       confidence: 1.0
     });
   }
   
-  // Consume one token
-  user.tokens -= 1;
+  userRequests[userId].push(now);
   
-  res.json({
+  return res.status(200).json({
     blocked: false,
     reason: "Input passed all security checks",
-    sanitizedOutput: req.body.input || "",
+    sanitizedOutput: req.body?.input || "",
     confidence: 0.95
   });
 });
@@ -63,6 +51,4 @@ app.get('/', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
